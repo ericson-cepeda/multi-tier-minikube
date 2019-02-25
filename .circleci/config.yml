@@ -1,0 +1,146 @@
+defaults: &defaults
+    machine:
+        enabled: true
+    working_directory: ~/Bits/repo
+    parallelism: 1
+    shell: /bin/bash --login
+    # CircleCI 2.0 does not support environment variables that refer to each other the same way as 1.0 did.
+    # If any of these refer to each other, rewrite them so that they don't or see https://circleci.com/docs/2.0/env-vars/#interpolating-environment-variables-to-set-other-environment-variables .
+    environment:
+      CIRCLE_ARTIFACTS: /tmp/circleci-artifacts
+      CIRCLE_TEST_REPORTS: /tmp/circleci-test-results
+      NODE_ENV: production
+      EMAIL: my@example.com
+      GIT_AUTHOR_NAME: Tech
+      GIT_COMMITTER_NAME: Tech
+
+aliases:
+  - &env
+    |
+      echo 'export IMG="${CIRCLE_PROJECT_REPONAME}:${CIRCLE_BRANCH}"' >> $BASH_ENV
+      echo 'export CNAME="${CIRCLE_PROJECT_REPONAME}"' >> $BASH_ENV
+      mkdir -p $CIRCLE_ARTIFACTS $CIRCLE_TEST_REPORTS
+      sudo docker info >/dev/null 2>&1 || sudo service docker start;
+
+  - &npmInstall
+    |
+      npm install -g gulp;
+      npm --production=false install;
+
+  - &npmBuild
+    |
+      npm run build;
+
+  - &npmTest
+    |
+      npm test;
+
+  - &tagRelease
+    |
+        git tag -a "release-${CIRCLE_BUILD_NUM}" -m "tag ${CIRCLE_BUILD_NUM}";
+        git push origin --tags;
+
+version: 2
+jobs:
+  build:
+    <<: *defaults
+    steps:
+      - checkout
+      - run: 
+          name: env
+          command: *env
+      - persist_to_workspace:
+          root: ~/Bits
+          paths:
+            - repo
+  test:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ~/Bits
+      - run: 
+          name: npmTest
+          command: *npmTest
+
+  deploy_beta:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ~/Bits
+      - run: 
+          name: deploy-beta
+          command: npm run deploy-beta
+
+  deploy_stage:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ~/Bits
+      - run: 
+          name: deploy-stage
+          command: npm run deploy-stage
+
+  tag_master_release:
+    <<: *defaults
+    steps:
+      - checkout
+      - run: 
+          name: tag_release
+          command: *tagRelease
+
+  deploy_prod_release:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ~/Bits
+      - run: 
+          name: deploy-release
+          command: npm run deploy-prod
+
+general:
+  branches:
+    ignore:
+      - /^(?!(master|beta|stage|hotfix)).*$/
+
+workflows:
+  version: 2
+  build:
+    jobs:
+      - build:
+          context: org-global
+          filters:
+            branches:
+              only: /(master|beta|stage|hotfix)/
+      - test:
+          context: org-global
+          requires:
+            - build
+          filters:
+            branches:
+              only: /(beta|stage|hotfix)/
+      - deploy_beta:
+          context: org-global
+          requires:
+            - test
+          filters:
+            branches:
+              only: beta
+      - deploy_stage:
+          context: org-global
+          requires:
+            - test
+          filters:
+            branches:
+              only: stage
+      - tag_master_release:
+          context: org-global
+          filters:
+            branches:
+              only: master
+      - deploy_prod_release:
+          context: org-global
+          requires:
+            - build
+          filters:
+            branches:
+              only: master

@@ -1,0 +1,9 @@
+version: '1'
+services:
+  soc-rest:
+    image: us.gcr.io/bits/socservice:dev
+    build: .
+    env_file:
+     - ./.env-dev
+    ports:
+     - "8080:80"

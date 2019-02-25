@@ -1,0 +1,16 @@
+service: main
+
+provider:
+  name: kubeless
+  runtime: python3.7
+
+  environment: #Global Environment variables
+      ${file(./configs/${self:provider.stage}.yml)}
+
+plugins:
+  - serverless-kubeless
+
+functions:
+  main:
+    description: 'Main function'
+    handler: socservice.main

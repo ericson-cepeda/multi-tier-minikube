@@ -1,0 +1,26 @@
+- name: Create a k8s data-tier namespace
+  k8s:
+    name: data
+    api_version: v1
+    kind: Namespace
+    state: present
+
+
+- name: Delete helm chart | MySQL
+  shell: helm delete --purge mysql
+  ignore_errors: true
+
+
+- name: Delete helm chart | Elasticsearch
+  shell: helm delete --purge elasticsearch
+  ignore_errors: true
+
+
+- name: Install helm chart | Elasticsearch
+  shell: helm install --namespace data --name elasticsearch --set client.replicas=1,master.replicas=1 stable/elasticsearch
+  ignore_errors: true
+
+
+- name: Install helm chart | MySQL
+  shell: helm install --namespace data --name mysql --set mysqlRootPassword=secretpassword,mysqlUser=my-user,mysqlPassword=my-password,mysqlDatabase=my-database stable/mysql
+  ignore_errors: true
