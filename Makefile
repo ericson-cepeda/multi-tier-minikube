@@ -31,3 +31,4 @@ build-soc-rest:
 	docker push us.gcr.io/bits/socservice:dev
 
 run-soc-rest: 
+	docker-compose up soc-rest
